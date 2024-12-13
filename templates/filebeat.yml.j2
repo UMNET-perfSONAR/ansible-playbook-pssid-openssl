@@ -1,0 +1,12 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/pssid.log
+
+output.logstash:
+  hosts: ["{{ logstash_hosts }}"]
+  ssl:
+    certificate_authorities: ["/etc/filebeat/ca.crt"]
+    ssl.certificate: "/etc/filebeat/{{inventory_hostname}}.crt"
+    ssl.key: "/etc/filebeat/{{inventory_hostname}}.key"

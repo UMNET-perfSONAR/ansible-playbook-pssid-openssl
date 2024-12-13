@@ -1,0 +1,155 @@
+# Generate and provision mTLS certificates
+- name: Generate certificates for mTLS
+  hosts: localhost
+
+  vars:
+    - server_hostname: pssid-db.miserver.it.umich.edu
+    - client_certs_dir: /etc/ssl/pssid-data-pipline-ssl/client_certs/
+    - server_certs_dir: /etc/ssl/pssid-data-pipline-ssl/server_certs/
+    - db_server_certs_dir: /home/wmarcoyu/logstash-pipeline/
+    - ca_private_key: /etc/ssl/pssid-data-pipline-ssl/server_certs/ca.key
+    - ca_certificate: /etc/ssl/pssid-data-pipline-ssl/server_certs/ca.crt
+    - logstash_private_key: /etc/ssl/pssid-data-pipline-ssl/server_certs/logstash.key
+    - logstash_certificate: /etc/ssl/pssid-data-pipline-ssl/server_certs/logstash.crt
+  
+  tasks:
+    # Generate ca and server certificates
+    - name: Create directory for server certificates
+      ansible.builtin.file:
+        path: "{{ server_certs_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Generate Certificate Authority (CA) private key
+      community.crypto.openssl_privatekey:
+        path: "{{ ca_private_key }}"
+        type: RSA
+        size: 2048
+        format: pkcs8
+
+    - name: Generate CA certificate (self-signed)
+      community.crypto.x509_certificate:
+        path: "{{ ca_certificate }}"
+        privatekey_path: "{{ ca_private_key }}"
+        common_name: "{{ server_hostname }}"
+        provider: selfsigned
+        
+    - name: Generate Logstash private key
+      community.crypto.openssl_privatekey:
+        path: "{{ logstash_private_key }}"
+        type: RSA
+        size: 2048
+        format: pkcs8
+
+    - name: Generate Logstash certificate signing request (CSR)
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ logstash_private_key }}"
+        common_name: "{{ server_hostname }}"
+      register: logstash_csr
+
+    - name: Sign Logstash CSR with the CA to create logstash.crt
+      community.crypto.x509_certificate:
+        path: "{{ logstash_certificate }}"
+        csr_content: "{{ logstash_csr.csr }}"
+        ownca_path: "{{ ca_certificate }}"
+        ownca_privatekey_path: "{{ ca_private_key }}"
+        provider: ownca
+
+    # Generate unique client certificates for each host
+    - name: Create directory for client certificates
+      ansible.builtin.file:
+        path: "{{ client_certs_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Generate client private key and CSR for each Raspberry Pi
+      community.crypto.openssl_privatekey:
+        path: "{{ client_certs_dir }}/{{ item }}.key"
+        type: RSA
+        size: 2048
+        format: pkcs8
+      loop: "{{ groups['raspberry_pis'] }}"
+      register: client_keys
+
+    - name: Generate client CSR
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ client_certs_dir }}/{{ item }}.key"
+        common_name: "{{ item }}"
+      loop: "{{ groups['raspberry_pis'] }}"
+      register: client_csrs
+
+    - name: Sign client CSR with the CA to create client.crt
+      community.crypto.x509_certificate:
+        path: "{{ client_certs_dir }}/{{ item }}.crt"
+        csr_content: "{{ item.1.csr }}"
+        ownca_path: "{{ ca_certificate }}"
+        ownca_privatekey_path: "{{ ca_private_key }}"
+        provider: ownca
+      loop: "{{ client_csrs.results | zip(groups['raspberry_pis']) | list }}"
+
+# Provision server certificates, keys to server
+- name: Provision server certificates to servers
+  hosts: servers
+  tasks:
+    - name: Copy server private key to the server
+      ansible.builtin.copy:
+        src: "{{ logstash_private_key }}"
+        dest: "{{db_server_certs_dir}}/logstash.key"
+        mode: '0600'
+
+    - name: Copy server certificate to the server
+      ansible.builtin.copy:
+        src: "{{ logstash_certificate }}"
+        dest: "{{db_server_certs_dir}}/logstash.crt"
+        mode: '0644'
+
+    - name: Copy CA certificate to the server
+      ansible.builtin.copy:
+        src: "{{ ca_certificate }}"
+        dest: "{{db_server_certs_dir}}/ca.crt"
+        mode: '0644'
+    
+    - name: Add mTLS configuration block after a specific line
+      ansible.builtin.blockinfile:
+        path: "/home/wmarcoyu/logstash-pipeline/logstash.conf"
+        block: |
+          input {
+            beats {
+              port => 9400
+              ssl => true
+              ssl_certificate => "/usr/share/logstash/pipeline/logstash.crt"
+              ssl_key => "/usr/share/logstash/pipeline/logstash.key"
+              ssl_verify_mode => "force_peer"
+              ssl_certificate_authorities => ["/usr/share/logstash/pipeline/ca.crt"]
+            }
+          }
+        insertafter: "input {"
+        marker: "# ANSIBLE MANAGED BLOCK: mTLS configuration"
+
+# Provision the certificates to each Raspberry Pi
+- name: Provision client certificates
+  hosts: raspberry_pis
+  tasks:
+    - name: Copy client private key to Raspberry Pi
+      ansible.builtin.copy:
+        src: "{{ client_certs_dir }}/{{ inventory_hostname }}.key"
+        dest: "/etc/filebeat/{{ inventory_hostname }}.key"
+        mode: '0600'
+
+    - name: Copy client certificate to Raspberry Pi
+      ansible.builtin.copy:
+        src: "{{ client_certs_dir }}/{{ inventory_hostname }}.crt"
+        dest: "/etc/filebeat/{{ inventory_hostname }}.crt"
+        mode: '0644'
+
+    - name: Copy CA certificate to Raspberry Pi
+      ansible.builtin.copy:
+        src: "{{ ca_certificate }}"
+        dest: "/etc/filebeat/ca.crt"
+        mode: '0644'
+    
+    - name: Deploy filebeat.yml configuration from template
+      ansible.builtin.template:
+        src: templates/filebeat.yml.j2
+        dest: /etc/filebeat/filebeat.yml
+        mode: '0644'
