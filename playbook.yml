@@ -21,36 +21,48 @@
         mode: '0755'
 
     - name: Generate Certificate Authority (CA) private key
-      community.crypto.openssl_privatekey:
-        path: "{{ ca_private_key }}"
-        type: RSA
-        size: 2048
-        format: pkcs8
+          community.crypto.openssl_privatekey:
+            path: "{{ ca_private_key }}"
+            type: RSA
+            size: 2048
+            format: pkcs8
 
-    - name: Generate CA certificate (self-signed)
-      community.crypto.x509_certificate:
-        path: "{{ ca_certificate }}"
+    - name: Generate ca certificate signing request (CSR)
+      community.crypto.openssl_csr_pipe:
         privatekey_path: "{{ ca_private_key }}"
         common_name: "{{ server_hostname }}"
+        basic_constraints:
+          - 'CA:TRUE'
+        # basic_constraints_critical: true
+        key_usage:
+          - keyCertSign
+        # key_usage_critical: true
+      register: ca_csr
+
+    - name: Generate CA certificate (self-signed) from CSR
+      community.crypto.x509_certificate:
+        path: "{{ ca_certificate }}"
+        csr_content: "{{ ca_csr.csr }}"
+        privatekey_path: "{{ ca_private_key }}"
         provider: selfsigned
-        
+
     - name: Generate Logstash private key
       community.crypto.openssl_privatekey:
         path: "{{ logstash_private_key }}"
         type: RSA
         size: 2048
         format: pkcs8
-
+ 
     - name: Generate Logstash certificate signing request (CSR)
       community.crypto.openssl_csr_pipe:
         privatekey_path: "{{ logstash_private_key }}"
         common_name: "{{ server_hostname }}"
-      register: logstash_csr
+      register: csr
 
     - name: Sign Logstash CSR with the CA to create logstash.crt
       community.crypto.x509_certificate:
         path: "{{ logstash_certificate }}"
-        csr_content: "{{ logstash_csr.csr }}"
+        csr_content: "{{csr.csr}}"
         ownca_path: "{{ ca_certificate }}"
         ownca_privatekey_path: "{{ ca_private_key }}"
         provider: ownca
