@@ -95,11 +95,12 @@
         msg:
           - "client_csrs: {{ client_csrs.results }}"
           - "raspberry_pis: {{ groups['raspberry_pis'] }}"
+          - "{{ client_csrs.results | zip(groups['raspberry_pis']) | list }}"
 
     - name: Sign client CSR with the CA to create client.crt
       community.crypto.x509_certificate:
-        path: "{{ client_certs_dir }}/{{ item }}.crt"
-        csr_content: "{{ item.1.csr }}"
+        path: "{{ client_certs_dir }}/{{ item[1] }}.crt"
+        csr_content: "{{ item[0].csr }}"
         ownca_path: "{{ ca_certificate }}"
         ownca_privatekey_path: "{{ ca_private_key }}"
         provider: ownca
