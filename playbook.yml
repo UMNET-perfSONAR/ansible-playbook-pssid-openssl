@@ -106,34 +106,6 @@
         provider: ownca
       loop: "{{ client_csrs.results | zip(groups['raspberry_pis']) | list }}"
 
-# Provision the certificates to each Raspberry Pi
-- name: Provision client certificates
-  hosts: raspberry_pis
-  tasks:
-    - name: Copy client private key to Raspberry Pi
-      ansible.builtin.copy:
-        src: "{{ client_certs_dir }}/{{ inventory_hostname }}.key"
-        dest: "/etc/filebeat/{{ inventory_hostname }}.key"
-        mode: '0600'
-
-    - name: Copy client certificate to Raspberry Pi
-      ansible.builtin.copy:
-        src: "{{ client_certs_dir }}/{{ inventory_hostname }}.crt"
-        dest: "/etc/filebeat/{{ inventory_hostname }}.crt"
-        mode: '0644'
-
-    - name: Copy CA certificate to Raspberry Pi
-      ansible.builtin.copy:
-        src: "{{ ca_certificate }}"
-        dest: "/etc/filebeat/ca.crt"
-        mode: '0644'
-    
-    - name: Deploy filebeat.yml configuration from template
-      ansible.builtin.template:
-        src: templates/filebeat.yml.j2
-        dest: /etc/filebeat/filebeat.yml
-        mode: '0644'
-
 # Provision server certificates, keys to server
 - name: Provision server certificates to servers
   hosts: servers
@@ -172,4 +144,31 @@
           }
         insertafter: "input {"
         marker: "# ANSIBLE MANAGED BLOCK: mTLS configuration"
-        
+
+# Provision the certificates to each Raspberry Pi
+- name: Provision client certificates
+  hosts: raspberry_pis
+  tasks:
+    - name: Copy client private key to Raspberry Pi
+      ansible.builtin.copy:
+        src: "{{ client_certs_dir }}/{{ inventory_hostname }}.key"
+        dest: "/etc/filebeat/{{ inventory_hostname }}.key"
+        mode: '0600'
+
+    - name: Copy client certificate to Raspberry Pi
+      ansible.builtin.copy:
+        src: "{{ client_certs_dir }}/{{ inventory_hostname }}.crt"
+        dest: "/etc/filebeat/{{ inventory_hostname }}.crt"
+        mode: '0644'
+
+    - name: Copy CA certificate to Raspberry Pi
+      ansible.builtin.copy:
+        src: "{{ ca_certificate }}"
+        dest: "/etc/filebeat/ca.crt"
+        mode: '0644'
+    
+    - name: Deploy filebeat.yml configuration from template
+      ansible.builtin.template:
+        src: templates/filebeat.yml.j2
+        dest: /etc/filebeat/filebeat.yml
+        mode: '0644'
