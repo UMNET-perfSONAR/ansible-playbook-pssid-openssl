@@ -90,6 +90,12 @@
       loop: "{{ groups['raspberry_pis'] }}"
       register: client_csrs
 
+    - name: Debug client_csrs and raspberry_pis
+      debug:
+        msg:
+          - "client_csrs: {{ client_csrs.results }}"
+          - "raspberry_pis: {{ groups['raspberry_pis'] }}"
+
     - name: Sign client CSR with the CA to create client.crt
       community.crypto.x509_certificate:
         path: "{{ client_certs_dir }}/{{ item }}.crt"
