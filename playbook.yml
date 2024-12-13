@@ -21,11 +21,11 @@
         mode: '0755'
 
     - name: Generate Certificate Authority (CA) private key
-          community.crypto.openssl_privatekey:
-            path: "{{ ca_private_key }}"
-            type: RSA
-            size: 2048
-            format: pkcs8
+      community.crypto.openssl_privatekey:
+        path: "{{ ca_private_key }}"
+        type: RSA
+        size: 2048
+        format: pkcs8
 
     - name: Generate ca certificate signing request (CSR)
       community.crypto.openssl_csr_pipe:
