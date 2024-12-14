@@ -1,3 +1,14 @@
+# ansible-playbook \
+#     --inventory inventory/hosts.ini \
+#     --become \
+#     --user dianluhe \
+#     --become-method sudo \
+#     --become-user root \
+#     --ask-become-pass \
+#     --ask-pass \
+#     playbook.yml
+
+
 # Generate and provision mTLS certificates
 - name: Generate certificates for mTLS
   hosts: localhost
@@ -109,6 +120,14 @@
 # Provision server certificates, keys to server
 - name: Provision server certificates to servers
   hosts: servers
+
+  vars:
+    - ca_certificate: /etc/ssl/pssid-data-pipline-ssl/server_certs/ca.crt
+    - logstash_private_key: /etc/ssl/pssid-data-pipline-ssl/server_certs/logstash.key
+    - logstash_certificate: /etc/ssl/pssid-data-pipline-ssl/server_certs/logstash.crt
+    - db_server_certs_dir: /home/wmarcoyu/logstash-pipeline/
+
+
   tasks:
     - name: Copy server private key to the server
       ansible.builtin.copy:
