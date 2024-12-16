@@ -1,14 +1,3 @@
-# ansible-playbook \
-#     --inventory inventory/hosts.ini \
-#     --become \
-#     --user dianluhe \
-#     --become-method sudo \
-#     --become-user root \
-#     --ask-become-pass \
-#     --ask-pass \
-#     playbook.yml
-
-
 # Generate and provision mTLS certificates
 - name: Generate certificates for mTLS
   hosts: localhost
@@ -117,6 +106,7 @@
         provider: ownca
       loop: "{{ client_csrs.results | zip(groups['raspberry_pis']) | list }}"
 
+
 # Provision server certificates, keys to server
 - name: Provision server certificates to servers
   hosts: servers
@@ -147,6 +137,7 @@
         dest: "{{db_server_certs_dir}}/ca.crt"
         mode: '0644'
     
+    # $$ bug: bolckinfile does not generate indentation, use j2
     - name: Add mTLS configuration block after a specific line
       ansible.builtin.blockinfile:
         path: "/home/wmarcoyu/logstash-pipeline/logstash.conf"
@@ -164,7 +155,9 @@
         insertafter: "input {"
         marker: "# ANSIBLE MANAGED BLOCK: mTLS configuration"
 
+
 # Provision the certificates to each Raspberry Pi
+# $$ setting up ssh key for pssid-dev (gui) server ? and --limit raspberry-pis in hosts.ini during provision.
 - name: Provision client certificates
   hosts: raspberry_pis
   tasks:
