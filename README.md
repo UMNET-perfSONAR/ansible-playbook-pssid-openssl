@@ -2,7 +2,9 @@
 manage and distribute openssl certs for probe / archiver communication
 
 # Validate from client to server
+```bash
 openssl s_client -connect <hostname>:9400 -CAfile ./ca.crt
+```
 
 # Run playbook
 Two-factor authentication is disabled for Ansible on the target host. Add the following line to /etc/group.
